@@ -12,11 +12,9 @@
 #load "physics/body.jai";
 #load "physics/broadphase.jai";
 #load "physics/narrowphase.jai";
-#load "physics/solver.jai";
 #load "physics/EPA.jai";
 #load "physics/utils.jai";
 
-#load "physics/shapes/shape.jai";
 #load "physics/shapes/sphere.jai";
 #load "physics/shapes/box.jai";
 
@@ -157,7 +155,6 @@ main :: () {
 
                 for my_physics_world.bodies {
                     if it.position.y < -20 {
-                        deinit(it);
                         remove it;
                     }
                 }
@@ -202,13 +199,13 @@ main :: () {
             }
 
             for my_physics_world.bodies {
-                if it.shape.kind == {
+                if it.kind == {
                     case .SPHERE;
                         loc_color := glGetUniformLocation(checker_shader, "color");
                         loc_mat   := glGetUniformLocation(checker_shader, "model_matrix");
                     
                         color := Vector4.{ 1, 1, 1, 1 };
-                        sca := (cast(*Sphere_Shape) it.shape).radius;
+                        sca := it.sphere.radius;
                         mat := mat4_transformation_matrix(it.position, it.rotation, sca);
             
                         glBindVertexArray(sphere_vao);
@@ -221,7 +218,7 @@ main :: () {
                         loc_mat   := glGetUniformLocation(checker_shader, "model_matrix");
                     
                         color := Vector4.{ 1, 1, 1, 1 };
-                        sca := (cast(*Box_Shape) it.shape).size;
+                        sca := it.box.half_size;
                         mat := mat4_transformation_matrix(it.position, it.rotation, sca);
                 
                         glBindVertexArray(box_vao);
@@ -269,15 +266,13 @@ Initialize_Scene_Empty :: () {
 }
 
 Initialize_Scene_Sphere :: () {
-    shape := New(Sphere_Shape);
-    shape.radius = 5.0;
-
     body := New(Body);
-    body.shape           = shape;
+    body.kind            = .SPHERE; 
+    body.sphere          = make_sphere_shape(5.0);
     body.position        = .{ 0, 0, 0 };
     body.rotation        = .{ 0, 0, 0, 1 };
     body.linear_velocity = .{}; 
-    body.inv_mass = 0.0;
+    body.inv_mass        = 0.0;
     body.elasticity      = 0.99;
     body.friction        = 0.5;
 
@@ -285,15 +280,13 @@ Initialize_Scene_Sphere :: () {
 }
 
 Initialize_Scene_Box :: () {
-    shape := New(Box_Shape);
-    init(shape, 10.0, 1.0, 10.0);
-
     body := New(Body);
-    body.shape           = shape;
+    body.kind            = .BOX; 
+    body.box             = make_box_shape(10.0, 1.0, 10.0);
     body.position        = .{ 0, 0, 0 };
     body.rotation        = .{ 0, 0, 0, 1 };
     body.linear_velocity = .{}; 
-    body.inv_mass = 0.0;
+    body.inv_mass        = 0.0;
     body.elasticity      = 0.99;
     body.friction        = 0.5;
 
@@ -302,15 +295,13 @@ Initialize_Scene_Box :: () {
 
 
 Add_Sphere :: () {
-    sphere := New(Sphere_Shape);
-    sphere.radius = 1.0;
-
     body := New(Body);
-    body.shape           = sphere;
+    body.kind            = .SPHERE; 
+    body.sphere          = make_sphere_shape(1.0);
     body.position        = .{ random_get_within_range(-0.5, 0.5), random_get_within_range(20, 25), random_get_within_range(-0.5, 0.5) };
     body.rotation        = .{ 0, 0, 0, 1 };
     body.linear_velocity = .{};
-    body.inv_mass = 1.0;
+    body.inv_mass        = 1.0;
     body.elasticity      = 0.5;
     body.friction        = 0.5;
 
@@ -318,15 +309,13 @@ Add_Sphere :: () {
 }
 
 Add_Box :: () {
-    box := New(Box_Shape);
-    init(box);
-
     body := New(Body);
-    body.shape           = box;
+    body.kind            = .BOX;
+    body.box             = make_box_shape(1.0);
     body.position        = .{ random_get_within_range(-0.5, 0.5), random_get_within_range(20, 25), random_get_within_range(-0.5, 0.5) };
     body.rotation        = .{ 0, 0, 0, 1 };
     body.linear_velocity = .{};
-    body.inv_mass = 1.0;
+    body.inv_mass        = 1.0;
     body.elasticity      = 0.5;
     body.friction        = 0.5;
 

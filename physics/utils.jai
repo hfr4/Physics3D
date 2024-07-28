@@ -90,7 +90,19 @@ get_interval :: (using obb: OBB, axis: Vector3) -> Interval {
     vertex: [8] Vector3; 
 
     q := ToQuaternion(rotation);
-    for BOX_UNIT_CORNERS {
+
+    CORNERS :: Vector3.[
+        .{ -1, -1, -1 },
+        .{  1, -1, -1 },
+        .{ -1,  1, -1 },
+        .{  1,  1, -1 },
+        .{ -1, -1,  1 },
+        .{  1, -1,  1 },
+        .{ -1,  1,  1 },
+        .{  1,  1,  1 },
+    ];
+
+    for CORNERS {
         vertex[it_index] = it * half_size;
         rotate(*vertex[it_index], q);
         vertex[it_index] += position;

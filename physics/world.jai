@@ -3,7 +3,6 @@ World :: struct {
 }
 
 deinit :: (using world: *World) {
-    for bodies deinit(it);
     array_reset(*bodies);
 }
 
@@ -14,9 +13,9 @@ update :: (using world: *World, dt: float) {
     narrowphase_contacts := get_narrowphase_contacts(broadphase_contacts);
     narrowphase_contacts.allocator = temp;
 
-    for narrowphase_contacts  solve(it);
+    for narrowphase_contacts solve(it);
 
-    for bodies  update(it, dt);
+    for bodies update(it, dt);
 }
 
 apply_gravity :: (using world: *World, gravity: Vector3 = .{ 0, -9.8, 0 }) {
