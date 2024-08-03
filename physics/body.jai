@@ -16,7 +16,6 @@ Body :: struct {
     rotation:         Quaternion = .{ 0, 0, 0, 1 };
     linear_velocity:  Vector3;
     angular_velocity: Vector3;
-    mass:             float;
     inv_mass:         float;
     elasticity:       float;
     friction:         float;
@@ -96,13 +95,6 @@ get_aabb :: (using body: Body) -> AABB {
     if #complete kind == {
         case .SPHERE; return get_aabb(sphere, position, rotation);
         case .BOX;    return get_aabb(box, position, rotation);
-    }
-}
-
-get_support_point :: (using body: Body, direction: Vector3, bias: float) -> Vector3 {
-    if #complete kind == {
-        case .SPHERE; return get_support_point(sphere, direction, position, rotation, bias);
-        case .BOX;    return get_support_point(box, direction, position, rotation, bias);
     }
 }
 

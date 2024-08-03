@@ -7,11 +7,13 @@
 
 #load "camera.jai";
 #load "mat4.jai";
+// #load "obb.jai";
 
 #load "physics/world.jai";
 #load "physics/body.jai";
 #load "physics/broadphase.jai";
 #load "physics/narrowphase.jai";
+#load "physics/GJK.jai";
 #load "physics/EPA.jai";
 #load "physics/utils.jai";
 
@@ -109,8 +111,8 @@ main :: () {
                         case .SDLK_SPACE;   is_down_SPACE  = true; update_physics = !update_physics;  
                         case .SDLK_1;       is_down_1      = true; Add_Sphere();
                         case .SDLK_2;       is_down_2      = true; Add_Box();
-                        case .SDLK_r;       Reset_Scene_Sphere();
-                        case .SDLK_t;       Reset_Scene_Box();
+                        case .SDLK_r;        Reset_Scene_Sphere();
+                        case .SDLK_t;        Reset_Scene_Box();
                         case .SDLK_f;       play_one_physics_step = true;
                     }
 
@@ -218,7 +220,7 @@ main :: () {
                         loc_mat   := glGetUniformLocation(checker_shader, "model_matrix");
                     
                         color := Vector4.{ 1, 1, 1, 1 };
-                        sca := it.box.half_size;
+                        sca := it.box.extents;
                         mat := mat4_transformation_matrix(it.position, it.rotation, sca);
                 
                         glBindVertexArray(box_vao);
@@ -226,12 +228,10 @@ main :: () {
                         glUniformMatrix4fv(loc_mat, 1, false, xx *mat);
                         glDrawArrays(GL_TRIANGLES, 0, xx box_vertices.count);
                 } 
-/*
-                aabb := get_aabb(it);
-                glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
-                draw_3d_aabb(aabb, .{ 1, 1, 0, 1});
-                glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
-*/
+                // aabb := get_aabb(it);
+                // glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
+                // draw_3d_aabb(aabb, .{ 1, 1, 0, 1});
+                // glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
             }
 
 /*
@@ -284,6 +284,9 @@ Initialize_Scene_Box :: () {
     body.kind            = .BOX; 
     body.box             = make_box_shape(10.0, 1.0, 10.0);
     body.position        = .{ 0, 0, 0 };
+    q: Quaternion;
+    set_from_axis_and_angle(*q, normalize(Vector3.{ 1, 1, 0 }), .2);
+    body.rotation        = q;
     body.rotation        = .{ 0, 0, 0, 1 };
     body.linear_velocity = .{}; 
     body.inv_mass        = 0.0;
@@ -292,7 +295,6 @@ Initialize_Scene_Box :: () {
 
     array_add(*my_physics_world.bodies, body);
 }
-
 
 Add_Sphere :: () {
     body := New(Body);
@@ -339,7 +341,7 @@ draw_3d_point :: (x: float, y: float, z: float, color: Vector4 = .{ 1, 1, 1, 1},
 }
 
 draw_3d_obb :: (obb: OBB, color: Vector4 = .{ 1, 1, 1, 1}) {
-    mat := mat4_transformation_matrix(obb.position, ToQuaternion(obb.rotation), obb.half_size);
+    mat := mat4_transformation_matrix(obb.position, ToQuaternion(obb.rotation), obb.extents);
 
     loc_mat   := glGetUniformLocation(checker_shader, "model_matrix");
     loc_color := glGetUniformLocation(checker_shader, "color");

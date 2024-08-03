@@ -44,7 +44,7 @@ sphere_sphere_contact :: (A: *Body, B: *Body) -> Narrowphase_Contact, bool {
 box_sphere_contact :: (A: *Body, B: *Body) -> Narrowphase_Contact, bool {
     contact: Narrowphase_Contact;
 
-    obb       := OBB.{ A.position, ToMat3(A.rotation), A.box.half_size };
+    obb       := OBB.{ A.position, ToMat3(A.rotation), A.box.extents };
     is_inside := collision_point_obb(B.position, obb);
     point     := closest_point_on_obb(obb, B.position); 
     dist      := length(B.position - point);
@@ -77,6 +77,73 @@ box_box_contact :: (A: *Body, B: *Body) -> Narrowphase_Contact, bool {
 
     return contact, true;
 }
+
+/*
+box_box_contact_v2 :: (A: *Body, B: *Body) -> Narrowphase_Contact, bool {
+    contact: Narrowphase_Contact;
+
+    a_axes := get_axes(a);
+    b_axes := get_axes(b);
+
+    sat_axes := Vector3.[
+        a_axes[0],
+        a_axes[1],
+        a_axes[2],
+        b_axes[0],
+        b_axes[1],
+        b_axes[3],
+        normalize(cross(a_axes[0], b_axes[0]));
+        normalize(cross(a_axes[0], b_axes[1]));
+        normalize(cross(a_axes[0], b_axes[2]));
+        normalize(cross(a_axes[1], b_axes[0]));
+        normalize(cross(a_axes[1], b_axes[1]));
+        normalize(cross(a_axes[1], b_axes[2]));
+        normalize(cross(a_axes[2], b_axes[0]));
+        normalize(cross(a_axes[2], b_axes[1]));
+        normalize(cross(a_axes[2], b_axes[2]));
+    ];
+
+    collision_normal: Vector3;
+    collision_depth := FLOAT32_MAX;
+    collision_axis_index: int;
+
+    for axis: sat_axes {
+        a_min, a_max := get_projected_interval(a, axis);
+        b_min, b_max := get_projected_interval(b, axis);
+
+        is_overlaping := !(b_min > a_max || a_min > b_max);
+        if !is_overlaping return contact, false;
+
+        depth := (a_max - a_min + b_max - b_min) - (max(a_max, b_max) - min(a_min, b_min));
+        flip  := (b_min < a_min);
+
+        if depth > 0.0 && depth < collision_depth {
+            collision_depth      = depth;
+            collision_normal     = ifx flip then -axis else axis;
+            collision_axis_index = it_index;
+        }
+    }
+
+    reference_quad: Quad;
+    incident_quad:  Quad;
+
+    reference_quad := get_most_aligned_quad(reference_obb, collision_normal);
+    incident_quad  := get_most_aligned_quad(incident_obb, -collision_normal);
+
+    collision_points_on_A: [..] Vector3;
+    collision_points_on_B: [..] Vector3;
+
+
+    contact.A          = A;
+    contact.B          = B;
+    contact.normal     = collision_normal;
+    contact.depth      = collision_depth;
+    contact.point_on_A = world_to_local(A, world_point_on_A);
+    contact.point_on_B = world_to_local(B, world_point_on_B);
+
+    return contact, true;
+}
+*/
 
 solve :: (using contact: Narrowphase_Contact) {
     world_point_on_A := local_to_world(A, point_on_A);

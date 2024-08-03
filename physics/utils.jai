@@ -4,9 +4,9 @@ AABB :: struct {
 }
 
 OBB :: struct {
-    position:  Vector3;
-    rotation:  Matrix3;
-    half_size: Vector3;
+    position: Vector3;
+    rotation: Matrix3;
+    extents:  Vector3;
 }
 
 Plane :: struct {
@@ -16,6 +16,10 @@ Plane :: struct {
 
 Segment :: struct {
     a, b: Vector3;
+}
+
+Quad :: struct {
+    a, b, c, d: Vector3;
 }
 
 expand :: (using aabb: *AABB, p: Vector3) {
@@ -74,96 +78,239 @@ collision_point_obb :: (point: Vector3, obb: OBB) -> bool {
         axis     := obb.rotation.v[it];
         distance := dot(dir, axis);
 
-        if distance >  obb.half_size.component[it] return false;
-        if distance < -obb.half_size.component[it] return false;
+        if distance >  obb.extents.component[it] return false;
+        if distance < -obb.extents.component[it] return false;
     }
 
     return true;
 }
 
-Interval :: struct {
-    min: float;
-    max: float;
-}
+get_vertices :: (using obb: OBB) -> [8] Vector3 {
+    result: [8] Vector3;
 
-get_interval :: (using obb: OBB, axis: Vector3) -> Interval {
-    vertex: [8] Vector3; 
+    axes := get_axes(obb);
 
-    q := ToQuaternion(rotation);
-
-    CORNERS :: Vector3.[
-        .{ -1, -1, -1 },
-        .{  1, -1, -1 },
-        .{ -1,  1, -1 },
-        .{  1,  1, -1 },
-        .{ -1, -1,  1 },
-        .{  1, -1,  1 },
-        .{ -1,  1,  1 },
-        .{  1,  1,  1 },
-    ];
-
-    for CORNERS {
-        vertex[it_index] = it * half_size;
-        rotate(*vertex[it_index], q);
-        vertex[it_index] += position;
-    }
-
-    result := Interval.{ FLOAT32_MAX, FLOAT32_MIN };
-
-    for 0..7 {
-        projection := dot(axis, vertex[it]);
-        result.min = ifx projection < result.min then projection else result.min;
-        result.max = ifx projection > result.max then projection else result.max;
-    }
+    result[0] = position - axes[0] * extents.x - axes[1] * extents.y + axes[2] * extents.z;
+    result[1] = position + axes[0] * extents.x - axes[1] * extents.y + axes[2] * extents.z;
+    result[2] = position + axes[0] * extents.x + axes[1] * extents.y + axes[2] * extents.z;
+    result[3] = position - axes[0] * extents.x + axes[1] * extents.y + axes[2] * extents.z;
+    result[4] = position - axes[0] * extents.x - axes[1] * extents.y - axes[2] * extents.z;
+    result[5] = position + axes[0] * extents.x - axes[1] * extents.y - axes[2] * extents.z;
+    result[6] = position + axes[0] * extents.x + axes[1] * extents.y - axes[2] * extents.z;
+    result[7] = position - axes[0] * extents.x + axes[1] * extents.y - axes[2] * extents.z;
 
     return result;
 }
 
-overlap_on_axis :: (obb1: OBB, obb2: OBB, axis: Vector3) -> bool {
-    a := get_interval(obb1, axis);
-    b := get_interval(obb2, axis);
-    return (b.min <= a.max) && (a.min <= b.max);
+get_edges :: (obb: OBB) -> [12] Segment {
+    result: [12] Segment;
+
+    vertices := get_vertices(obb);
+
+    result[0]  = .{ vertices[0], vertices[1] };
+    result[1]  = .{ vertices[1], vertices[2] };
+    result[2]  = .{ vertices[2], vertices[3] };
+    result[3]  = .{ vertices[3], vertices[0] };
+    result[4]  = .{ vertices[4], vertices[5] };
+    result[5]  = .{ vertices[5], vertices[6] };
+    result[6]  = .{ vertices[6], vertices[7] };
+    result[7]  = .{ vertices[7], vertices[4] };
+    result[8]  = .{ vertices[0], vertices[4] };
+    result[9]  = .{ vertices[1], vertices[5] };
+    result[10] = .{ vertices[2], vertices[6] };
+    result[11] = .{ vertices[3], vertices[7] };
+
+    return result;
 }
 
-collision_obb_obb :: (a: OBB, b: OBB) -> bool {
-    axis: [15] Vector3;
-    axis[0] = a.rotation.v[0];
-    axis[1] = a.rotation.v[1];
-    axis[2] = a.rotation.v[2];
-    axis[3] = b.rotation.v[0];
-    axis[4] = b.rotation.v[1];
-    axis[5] = b.rotation.v[2];
+get_planes :: (using obb: OBB) -> [6] Plane {
+    result: [6] Plane;
 
-    for 0..2 { // Fill out rest of axis
-        axis[6 + it * 3 + 0] = cross(axis[it], axis[0]);
-        axis[6 + it * 3 + 1] = cross(axis[it], axis[1]);
-        axis[6 + it * 3 + 2] = cross(axis[it], axis[2]);
+    axes := get_axes(obb);
+
+    result[0] = .{ position + axes[0] * extents.x,  axes[0] };
+    result[1] = .{ position - axes[0] * extents.x, -axes[0] };
+    result[2] = .{ position + axes[1] * extents.y,  axes[1] };
+    result[3] = .{ position - axes[1] * extents.y, -axes[1] };
+    result[4] = .{ position + axes[2] * extents.z,  axes[2] };
+    result[5] = .{ position - axes[2] * extents.z, -axes[2] };
+
+    return result;
+}
+
+get_quads :: (using obb: OBB) -> [6] Quad {
+    result: [6] Quad;
+
+    vertices := get_vertices(obb);
+
+    result[0] = .{ vertices[0], vertices[1], vertices[2], vertices[3] };
+    result[1] = .{ vertices[4], vertices[7], vertices[6], vertices[5] };
+    result[2] = .{ vertices[0], vertices[3], vertices[7], vertices[4] };
+    result[3] = .{ vertices[1], vertices[5], vertices[6], vertices[2] };
+    result[4] = .{ vertices[0], vertices[4], vertices[5], vertices[1] };
+    result[5] = .{ vertices[3], vertices[2], vertices[6], vertices[7] };
+
+    return result;
+}
+
+get_axes :: (using obb: OBB) -> [3] Vector3 {
+    return rotation.v;
+}
+
+get_sat_axes :: (a: OBB, b: OBB) -> [15] Vector3 {
+    a_axes := get_axes(a);
+    b_axes := get_axes(b);
+
+    result: [15] Vector3;
+    result[0]  = a_axes[0];
+    result[1]  = a_axes[1];
+    result[2]  = a_axes[2];
+    result[3]  = b_axes[0];
+    result[4]  = b_axes[1];
+    result[5]  = b_axes[2];
+    result[6]  = normalize(cross(result[0], result[3]));
+    result[7]  = normalize(cross(result[0], result[4]));
+    result[8]  = normalize(cross(result[0], result[5]));
+    result[9]  = normalize(cross(result[1], result[3]));
+    result[10] = normalize(cross(result[1], result[4]));
+    result[11] = normalize(cross(result[1], result[5]));
+    result[12] = normalize(cross(result[2], result[3]));
+    result[13] = normalize(cross(result[2], result[4]));
+    result[14] = normalize(cross(result[2], result[5]));
+
+    return result;
+}
+
+get_projected_interval :: (using obb: OBB, axis: Vector3) -> float, float {
+    vertices := get_vertices(obb);
+
+    min :=  FLOAT32_MAX; 
+    max := -FLOAT32_MAX;
+
+    for vertices {
+        projection := dot(axis, it);
+        if min > projection min = projection;
+        if max < projection max = projection;
     }
 
-    for axis  {
-        if !overlap_on_axis(a, b, it) {
-            return false; // Seperating axis found
+    return min, max;
+}
+
+collision_obb_obb :: (a: OBB, b: OBB) -> Vector3, float, bool {
+    collision_normal:  Vector3;
+    collision_depth := FLOAT32_MAX;
+
+    axes := get_sat_axes(a, b);
+    for axis: axes {
+        a_min, a_max := get_projected_interval(a, axis);
+        b_min, b_max := get_projected_interval(b, axis);
+
+        intervals_are_overlaping := !(b_min > a_max || a_min > b_max);
+        if !intervals_are_overlaping return collision_normal, collision_depth, false;
+
+        depth := (a_max - a_min + b_max - b_min) - (max(a_max, b_max) - min(a_min, b_min));
+        flip  := (b_min < a_min);
+
+        if depth > 0.0 && depth < collision_depth {
+            collision_depth = depth;
+            collision_normal  = ifx flip then -axis else axis;
         }
     }
 
-    return true; // Seperating axis not found
+    return collision_normal, collision_depth, true;
 }
 
-collision_obb_plane :: (a: OBB, b: Plane) -> bool {
-	// Project the half extents of the AABB onto the plane normal
-	pLen := a.half_size.x * abs(dot(b.normal, a.rotation.v[0])) +
-            a.half_size.y * abs(dot(b.normal, a.rotation.v[1])) +
-            a.half_size.z * abs(dot(b.normal, a.rotation.v[2]));
-	// Find the distance from the center of the OBB to the plane
-	dist := length(a.position - b.position);
-	// Intersection occurs if the distance falls within the projected side
-	return dist <= pLen;
-}
-
-closest_point :: (point: Vector3, plane: Plane) -> Vector3 {
-	perpendicular_dist := dot(point - plane.position, plane.normal);
-	closest            := point - perpendicular_dist * plane.normal;
+get_closest_point :: (point: Vector3, plane: Plane) -> Vector3 {
+	distance := dot(point - plane.position, plane.normal);
+	closest  := point - distance * plane.normal;
 	return closest;
+}
+
+get_normal :: (using quad: Quad) -> Vector3 {
+    return normalize(cross(b - a, c - b));
+}
+
+plane_from_quad :: (using quad: Quad) -> Plane {
+    return .{ quad.a, get_normal(quad) };
+}
+
+is_colliding :: (a: Vector3, b: Quad) -> bool #symmetric {
+    n  := get_normal(b);
+    d1 := dot(cross(a - b.a, b.b - b.a), n);
+    d2 := dot(cross(a - b.b, b.c - b.b), n);
+    d3 := dot(cross(a - b.c, b.d - b.c), n);
+    d4 := dot(cross(a - b.d, b.a - b.d), n);
+
+    EPSILON :: 0.0001;
+    return d1 <= 0.0 && d2 <= 0.0 && d3 <= 0.0 && d4 <= 0.0 && abs(dot(a - b.a, n)) < EPSILON;
+}
+
+get_collision_point :: (segment: Segment, plane: Plane, segment_a_is_valid := true, segment_b_is_valid := true) -> Vector3, bool {
+    collision_point: Vector3;
+
+    segment_vector := segment.b - segment.a;
+
+    d0 := dot(plane.normal, segment.a);
+    d1 := dot(plane.normal, segment_vector);
+    d2 := dot(plane.normal, plane.position);
+
+    EPSILON :: 0.0001;
+    segment_and_plane_are_parallel := abs(d1) < EPSILON;
+    if segment_and_plane_are_parallel return collision_point, false;
+    
+    t := (d2 - d0) / d1;
+
+    if !segment_a_is_valid && t == 0.0 return collision_point, false;
+    if !segment_b_is_valid && t == 1.0 return collision_point, false;
+
+    collision_point_is_inside_segment := t >= 0.0 && t <= 1.0;
+    if !collision_point_is_inside_segment return collision_point, false;
+
+    collision_point = segment.a + segment_vector * t;
+
+    return collision_point, true;
+}
+
+get_collision_point :: (segment: Segment, quad: Quad, segment_a_is_valid := true, segment_b_is_valid := true) -> Vector3, bool {
+    collision_point, ok := get_collision_point(segment, plane_from_quad(quad), segment_a_is_valid, segment_b_is_valid);
+
+    if !ok || !is_colliding(collision_point, quad) return collision_point, false;
+
+    return collision_point, ok;
+}
+
+get_collision_points :: (a: OBB, b: Plane) -> [6] Vector3, int {
+    result: [6] Vector3;
+    count: int;
+
+    edges := get_edges(a);
+
+    for edge: edges {
+        collision_point, ok := get_collision_point(edge, b, segment_a_is_valid = false, segment_b_is_valid = it_index < 8);
+        if !ok continue;
+
+        result[count] = collision_point;
+        count += 1;
+    }
+
+    return result, count;
+}
+
+get_collision_points :: (a: OBB, b: Quad) -> [6] Vector3, int {
+    result: [6] Vector3;
+    count: int;
+
+    edges := get_edges(a);
+
+    for edge: edges {
+        collision_point, ok := get_collision_point(edge, b, segment_a_is_valid = false, segment_b_is_valid = it_index < 8);
+        if !ok continue;
+
+        result[count] = collision_point;
+        count += 1;
+    }
+
+    return result, count;
 }
 
 collision_sphere_obb :: (a: Vector3, r: float, obb: OBB) -> bool {
@@ -171,24 +318,19 @@ collision_sphere_obb :: (a: Vector3, r: float, obb: OBB) -> bool {
 }
 
 closest_point_on_obb :: (obb: OBB, point: Vector3) -> Vector3 {
-    result := obb.position;
-    dir    := point - obb.position;
+    axes := get_axes(obb);
+    translation := point - obb.position;
 
-    for 0..2 {
-        axis     := obb.rotation.v[it];
-        distance := dot(dir, axis);
+    dx := clamp(dot(translation, axes[0]), -obb.extents.x, obb.extents.x);
+    dy := clamp(dot(translation, axes[1]), -obb.extents.y, obb.extents.y);
+    dz := clamp(dot(translation, axes[2]), -obb.extents.z, obb.extents.z);
 
-        if distance >  obb.half_size.component[it]  distance =  obb.half_size.component[it];
-        if distance < -obb.half_size.component[it]  distance = -obb.half_size.component[it];
-
-        result = result + (axis * distance);
-    }
-
-    return result;
+    return obb.position + axes[0] * dx + axes[1] * dy + axes[2] * dz;
 }
 
 ToMat3 :: (using q: Quaternion) -> Matrix3 {
     result := Matrix3_Identity;
+
     rotate(*result.v[0], q);
     rotate(*result.v[1], q);
     rotate(*result.v[2], q);

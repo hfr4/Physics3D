@@ -20,9 +20,7 @@ get_aabb :: (using sphere: Sphere_Shape, pos: Vector3, rot: Quaternion) -> AABB 
     return aabb;
 }
 
-get_support_point :: (using sphere: Sphere_Shape, dir: Vector3, pos: Vector3, rot: Quaternion, bias: float) -> Vector3 {
-    return pos + dir * ( radius + bias );
-}
+
 
 get_inertia_tensor :: (using sphere: Sphere_Shape) -> Matrix3 {
     tensor: Matrix3;
