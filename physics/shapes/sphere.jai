@@ -2,7 +2,6 @@ Sphere_Shape :: struct {
     radius: float;
 }
 
-
 make_sphere_shape :: (radius: float) -> Sphere_Shape {
     sphere: Sphere_Shape;
 
@@ -19,8 +18,6 @@ get_aabb :: (using sphere: Sphere_Shape, pos: Vector3, rot: Quaternion) -> AABB 
 
     return aabb;
 }
-
-
 
 get_inertia_tensor :: (using sphere: Sphere_Shape) -> Matrix3 {
     tensor: Matrix3;

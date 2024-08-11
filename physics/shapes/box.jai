@@ -31,24 +31,25 @@ make_box_shape :: (extents: float) -> Box_Shape {
 }
 
 get_aabb :: (using box: Box_Shape, pos: Vector3, rot: Quaternion) -> AABB {
-    transformed_aabb: AABB;
-    for points expand(*transformed_aabb, rotate(it, rot));
+    aabb: AABB;
 
-    transformed_aabb.min += pos;
-    transformed_aabb.max += pos;
+    for points expand(*aabb, rotate(it, rot));
+    aabb.min += pos;
+    aabb.max += pos;
 
-    return transformed_aabb;
+    return aabb;
 }
 
 get_inertia_tensor :: (using box: Box_Shape) -> Matrix3 {
+    tensor: Matrix3;
+
     dx := extents.x * 2.0;
     dy := extents.y * 2.0;
     dz := extents.z * 2.0;
 
-    inertia_tensor: Matrix3;
-    inertia_tensor.coef[0][0] = ( dy * dy + dz * dz ) / 12.0;
-    inertia_tensor.coef[1][1] = ( dx * dx + dz * dz ) / 12.0;
-    inertia_tensor.coef[2][2] = ( dx * dx + dy * dy ) / 12.0;
+    tensor.coef[0][0] = ( dy * dy + dz * dz ) / 12.0;
+    tensor.coef[1][1] = ( dx * dx + dz * dz ) / 12.0;
+    tensor.coef[2][2] = ( dx * dx + dy * dy ) / 12.0;
 
-    return inertia_tensor;
+    return tensor;
 }

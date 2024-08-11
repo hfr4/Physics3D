@@ -5,13 +5,13 @@ EPA_Collision :: (A: *Body, B: *Body) -> Vector3, Vector3, bool {
     // Check that we have a 3-simplex (EPA expects a tetrahedron)
 
     if simplex.count == 1 {
-        direction := simplex.points[0].pos * -1.0;
+        direction := simplex.points[0].position * -1.0;
         support   := make_support_point(A, B, direction);
         add(*simplex, support);
     }
 
     if simplex.count == 2 {
-        ab := simplex.points[1].pos - simplex.points[0].pos;
+        ab := simplex.points[1].position - simplex.points[0].position;
         u, v := GetOrtho(ab);
 
         direction := u;
@@ -20,8 +20,8 @@ EPA_Collision :: (A: *Body, B: *Body) -> Vector3, Vector3, bool {
     }
 
     if simplex.count == 3 {
-        ab := simplex.points[1].pos - simplex.points[0].pos;
-        ac := simplex.points[2].pos - simplex.points[0].pos;
+        ab := simplex.points[1].position - simplex.points[0].position;
+        ac := simplex.points[2].position - simplex.points[0].position;
 
         direction := cross(ab, ac);
         support   := make_support_point(A, B, direction);
@@ -40,15 +40,20 @@ EPA_Collision :: (A: *Body, B: *Body) -> Vector3, Vector3, bool {
 expand_polytope :: (A: *Body, B: *Body, simplex: Simplex, bias: float) -> Vector3, Vector3 {
     // Expand the simplex by the bias amount
 
-    center := get_center(simplex);
+    center := (
+        simplex.points[0].position + 
+        simplex.points[1].position + 
+        simplex.points[2].position + 
+        simplex.points[3].position
+    ) / 4.0;
 
     for 0..simplex.count - 1 {
         point     := *simplex.points[it];
-        direction := normalize(point.pos - center); // ray from "center" to witness point
+        direction := normalize(point.position - center); // ray from "center" to witness point
 
         point.on_A += direction * bias;
         point.on_B -= direction * bias;
-        point.pos   = point.on_A - point.on_B;
+        point.position   = point.on_A - point.on_B;
     }
 
     // Initialize points and triangles
@@ -69,7 +74,7 @@ expand_polytope :: (A: *Body, B: *Body, simplex: Simplex, bias: float) -> Vector
         tri := Triangle_Indices.{ i, j, k };
 
         // The unused point is always on the negative/inside of the triangle.. make sure the normal points away
-        dist := signed_distance_to_triangle(points, tri, points[l].pos);
+        dist := signed_distance_to_triangle(points, tri, points[l].position);
         if dist > 0.0 Swap(*tri.a, *tri.b);
         
         array_add(*triangles, tri);
@@ -83,9 +88,9 @@ expand_polytope :: (A: *Body, B: *Body, simplex: Simplex, bias: float) -> Vector
         pt     := make_support_point(A, B, normal, bias);
 
         // if w already exists, then just stop because it means we can't expand any further
-        if has_point(points, triangles, pt.pos) break;
+        if has_point(points, triangles, pt.position) break;
 
-        dist := signed_distance_to_triangle(points, tri, pt.pos);
+        dist := signed_distance_to_triangle(points, tri, pt.position);
         if dist <= 0.0 break; // can't expand
 
         new_idx := points.count;
@@ -93,7 +98,7 @@ expand_polytope :: (A: *Body, B: *Body, simplex: Simplex, bias: float) -> Vector
 
         // Remove Triangles that face this point
         for triangles {
-            if signed_distance_to_triangle(points, it, pt.pos) > 0.0 {
+            if signed_distance_to_triangle(points, it, pt.position) > 0.0 {
                 remove it;
             }
         }
@@ -122,7 +127,7 @@ expand_polytope :: (A: *Body, B: *Body, simplex: Simplex, bias: float) -> Vector
 
     // Get the projection of the origin on the closest triangle
     tri     := closest_triangle_to_point(points, triangles, ORIGIN);
-    coords  := barycentric_coordinates(points[tri.a].pos, points[tri.b].pos, points[tri.c].pos, ORIGIN);
+    coords  := barycentric_coordinates(points[tri.a].position, points[tri.b].position, points[tri.c].position, ORIGIN);
 
     pt_on_A := points[tri.a].on_A * coords.x + points[tri.b].on_A * coords.y + points[tri.c].on_A * coords.z;
     pt_on_B := points[tri.a].on_B * coords.x + points[tri.b].on_B * coords.y + points[tri.c].on_B * coords.z;
@@ -142,14 +147,14 @@ Edge_Indices :: struct {
 }
 
 triangle_normal :: (points: [] Support_Point, tri: Triangle_Indices) -> Vector3 {
-    ab := points[tri.b].pos - points[tri.a].pos;
-    ac := points[tri.c].pos - points[tri.a].pos;
+    ab := points[tri.b].position - points[tri.a].position;
+    ac := points[tri.c].position - points[tri.a].position;
 
     return normalize(cross(ab, ac));
 }
 
 signed_distance_to_triangle :: (points: [] Support_Point, tri: Triangle_Indices, point: Vector3) -> float {
-    ap := point - points[tri.a].pos;
+    ap := point - points[tri.a].position;
     n  := triangle_normal(points, tri);
 
     return dot(n, ap);
@@ -159,9 +164,9 @@ has_point :: (points: [] Support_Point, triangles: [] Triangle_Indices, point: V
     EPSILON :: 0.001 * 0.001;
 
     for triangles {
-        if length_squared(point - points[it.a].pos) < EPSILON return true;
-        if length_squared(point - points[it.b].pos) < EPSILON return true;
-        if length_squared(point - points[it.c].pos) < EPSILON return true;
+        if length_squared(point - points[it.a].position) < EPSILON return true;
+        if length_squared(point - points[it.b].position) < EPSILON return true;
+        if length_squared(point - points[it.c].position) < EPSILON return true;
     }
 
     return false;

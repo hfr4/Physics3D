@@ -28,8 +28,8 @@ update :: (using body: *Body, dt: float) {
     // Calculate and update angular velocity
     rotation_matrix := ToMat3(rotation);
     inertia_tensor  := rotation_matrix * get_inertia_tensor(body) * transpose(rotation_matrix);
-    alpha           := inverse(inertia_tensor) * cross(angular_velocity, inertia_tensor * angular_velocity);
-    angular_velocity += alpha * dt;
+    theta           := inverse(inertia_tensor) * cross(angular_velocity, inertia_tensor * angular_velocity);
+    angular_velocity += theta * dt;
 
     // Update rotation
     angle_change := angular_velocity * dt;
@@ -80,15 +80,15 @@ get_local_center_of_mass :: (using body: Body) -> Vector3 {
 }
 
 world_to_local :: (using body: Body, point: Vector3) -> Vector3 {
-    tmp              := point - get_local_center_of_mass(body);
-    inverse_rotation := Inverse(rotation);
-    body_space       := rotate(tmp, inverse_rotation);
-    return body_space;
+    tra := point - get_local_center_of_mass(body);
+    rot := Inverse(rotation);
+    return rotate(tra, rot);
 }
 
-local_to_world :: (using body: Body, worldPt: Vector3) -> Vector3 {
-    world_space := get_local_center_of_mass(body) + rotate(worldPt, rotation);
-    return world_space;
+local_to_world :: (using body: Body, point: Vector3) -> Vector3 {
+    rot := rotate(point, rotation);
+    tra := get_local_center_of_mass(body);
+    return tra + rot;
 }
 
 get_aabb :: (using body: Body) -> AABB {

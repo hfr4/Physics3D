@@ -16,18 +16,16 @@ add :: (using simplex: *Simplex, point: Support_Point) {
     count += 1;
 }
 
-get_center :: (using simplex: Simplex) -> Vector3 {
-    return (points[0].pos + points[1].pos + points[2].pos + points[3].pos) / 4.0;
-}
-
 Support_Point :: struct {
-    on_A: Vector3; // Point on A
-    on_B: Vector3; // Point on B
-    pos:  Vector3; // Point on minkowski sum
+    on_A:     Vector3;
+    on_B:     Vector3;
+    position: Vector3;
 }
 
 make_support_point :: (A: Body, B: Body, direction: Vector3, bias: float = 0.0) -> Support_Point {
-    support :: (using body: Body, direction: Vector3, bias: float) -> Vector3 {
+    point: Support_Point;
+
+    farthest_point_in_this_direction :: (using body: Body, direction: Vector3, bias: float) -> Vector3 {
         if #complete kind == {
             case .SPHERE; 
                 return position + direction * ( sphere.radius + bias );
@@ -45,16 +43,14 @@ make_support_point :: (A: Body, B: Body, direction: Vector3, bias: float = 0.0) 
                         max_point = point;
                     }
                 }
-
+                
                 return max_point + direction * bias;
         }
     }
 
-    point: Support_Point;
-    
-    point.on_A = support(A,  normalize(direction), bias);
-    point.on_B = support(B, -normalize(direction), bias);
-    point.pos  = point.on_A - point.on_B;
+    point.on_A     = farthest_point_in_this_direction(A,  normalize(direction), bias);
+    point.on_B     = farthest_point_in_this_direction(B, -normalize(direction), bias);
+    point.position = point.on_A - point.on_B;
 
     return point;
 }
@@ -67,7 +63,7 @@ GJK_Collision :: (A: *Body, B: *Body) -> Simplex, bool {
     
     add(*simplex, support); 
 
-    direction = support.pos * -1.0; // Go in opposite direction (far side of origin)
+    direction = support.position * -1.0; // Go in opposite direction (far side of origin)
 
     MAX_STEPS :: 50;
 
@@ -76,7 +72,7 @@ GJK_Collision :: (A: *Body, B: *Body) -> Simplex, bool {
         support = make_support_point(A, B, direction);
 
         // Didn't reach the origin i.e. no intersection (can't enclose the origin)
-        if dot(support.pos, direction) < 0.0 return simplex, false;
+        if dot(support.position, direction) < 0.0 return simplex, false;
 
         add(*simplex, support);
         
@@ -104,8 +100,8 @@ line_contains_origin :: (simplex: *Simplex, direction: *Vector3) -> bool {
     A := simplex.points[1]; // A is the point we just added, the direction that we moved
     B := simplex.points[0]; // B is further from origin than A, because A went past the origin, so B cannot be the closest point
 
-    AO := ORIGIN - A.pos;
-    AB := B.pos  - A.pos;    
+    AO := ORIGIN - A.position;
+    AB := B.position  - A.position;    
 
     // AB and AO are in the same direction, therefore the origin is in the edge region.
     if dot(AO, AB) > 0.0 { 
@@ -126,9 +122,9 @@ triangle_contains_origin :: (simplex: *Simplex, direction: *Vector3) -> bool {
     B := simplex.points[1];
     C := simplex.points[0];
 
-    AO := ORIGIN - A.pos;
-    AB := B.pos  - A.pos;
-    AC := C.pos  - A.pos;
+    AO := ORIGIN - A.position;
+    AB := B.position  - A.position;
+    AC := C.position  - A.position;
 
     ABC := cross(AB, AC);
 
@@ -190,10 +186,10 @@ tetrahedron_contains_origin :: (simplex: *Simplex, direction: *Vector3) -> bool 
     C := simplex.points[1];
     D := simplex.points[0];
 
-    AO := ORIGIN - A.pos;
-    AB := B.pos  - A.pos;
-    AC := C.pos  - A.pos;
-    AD := D.pos  - A.pos;
+    AO := ORIGIN - A.position;
+    AB := B.position  - A.position;
+    AC := C.position  - A.position;
+    AD := D.position  - A.position;
 
     ABC := cross(AB, AC);
     ACD := cross(AC, AD);

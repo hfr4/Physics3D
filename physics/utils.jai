@@ -22,6 +22,10 @@ Quad :: struct {
     a, b, c, d: Vector3;
 }
 
+make_plane :: (using quad: Quad) -> Plane {
+    return .{ quad.a, get_normal(quad) };
+}
+
 expand :: (using aabb: *AABB, p: Vector3) {
     if p.x < min.x  min.x = p.x;
     if p.y < min.y  min.y = p.y;
@@ -83,6 +87,23 @@ collision_point_obb :: (point: Vector3, obb: OBB) -> bool {
     }
 
     return true;
+}
+
+get_side_planes :: (using quad: Quad) -> [4] Plane {
+    return .[
+        .{ a, normalize(a - d) },
+        .{ b, normalize(b - a) },
+        .{ c, normalize(c - b) },
+        .{ d, normalize(d - c) },
+    ];
+}
+
+get_points :: (using segment: Segment) -> [2] Vector3 {
+    return .[ a, b ];
+}
+
+get_edges :: (using quad: Quad) -> [4] Segment {
+    return .[ .{ a, b }, .{ b, c }, .{ c, d }, .{ d, a } ];
 }
 
 get_vertices :: (using obb: OBB) -> [8] Vector3 {
@@ -220,10 +241,35 @@ collision_obb_obb :: (a: OBB, b: OBB) -> Vector3, float, bool {
     return collision_normal, collision_depth, true;
 }
 
-get_closest_point :: (point: Vector3, plane: Plane) -> Vector3 {
-	distance := dot(point - plane.position, plane.normal);
-	closest  := point - distance * plane.normal;
-	return closest;
+get_closest_point :: (a: Vector3, b: Segment) -> Vector3 {
+    translation := b.b - b.a;
+    ratio       := dot(a - b.a, translation) / length_squared(translation);
+    Clamp(*ratio, 0, 1);
+    closest     := lerp(b.a, b.b, ratio);
+    return closest;
+}
+
+get_closest_point :: (a: Vector3, b: Plane) -> Vector3 {
+    translation := a - b.position;
+    distance    := dot(translation, b.normal);
+    closest     := a - b.normal * distance;
+    return closest;
+}
+
+get_closest_points :: (a: Segment, b: Segment) -> Vector3, Vector3 {
+    closest_aa_on_plane := get_closest_point(a.a, Plane.{ b.a, normalize(b.b - b.a) });
+    closest_ab_on_plane := get_closest_point(a.b, Plane.{ b.a, normalize(b.b - b.a) });
+    closests_vector     := closest_ab_on_plane - closest_aa_on_plane;
+
+    segments_are_parallel := (closest_aa_on_plane == closest_ab_on_plane);
+
+    ratio := ifx !segments_are_parallel then dot(b.a - closest_aa_on_plane, closests_vector) / dot(closests_vector, closests_vector);
+    Clamp(*ratio, 0.0, 1.0);
+
+    closest_b := get_closest_point(lerp(a.a, a.b, ratio), b);
+    closest_a := get_closest_point(closest_b            , a);
+
+    return closest_a, closest_b;
 }
 
 get_normal :: (using quad: Quad) -> Vector3 {
@@ -245,7 +291,7 @@ is_colliding :: (a: Vector3, b: Quad) -> bool #symmetric {
     return d1 <= 0.0 && d2 <= 0.0 && d3 <= 0.0 && d4 <= 0.0 && abs(dot(a - b.a, n)) < EPSILON;
 }
 
-get_collision_point :: (segment: Segment, plane: Plane, segment_a_is_valid := true, segment_b_is_valid := true) -> Vector3, bool {
+get_collision_point :: (segment: Segment, plane: Plane, a_is_valid := true, b_is_valid := true) -> Vector3, bool {
     collision_point: Vector3;
 
     segment_vector := segment.b - segment.a;
@@ -255,62 +301,21 @@ get_collision_point :: (segment: Segment, plane: Plane, segment_a_is_valid := tr
     d2 := dot(plane.normal, plane.position);
 
     EPSILON :: 0.0001;
+
     segment_and_plane_are_parallel := abs(d1) < EPSILON;
     if segment_and_plane_are_parallel return collision_point, false;
     
-    t := (d2 - d0) / d1;
+    ratio := (d2 - d0) / d1;
 
-    if !segment_a_is_valid && t == 0.0 return collision_point, false;
-    if !segment_b_is_valid && t == 1.0 return collision_point, false;
+    if !a_is_valid && ratio == 0.0 return collision_point, false;
+    if !b_is_valid && ratio == 1.0 return collision_point, false;
 
-    collision_point_is_inside_segment := t >= 0.0 && t <= 1.0;
-    if !collision_point_is_inside_segment return collision_point, false;
+    collision_point_is_outside_segment := ratio < 0.0 || ratio > 1.0;
+    if collision_point_is_outside_segment return collision_point, false;
 
-    collision_point = segment.a + segment_vector * t;
+    collision_point = segment.a + segment_vector * ratio;
 
     return collision_point, true;
-}
-
-get_collision_point :: (segment: Segment, quad: Quad, segment_a_is_valid := true, segment_b_is_valid := true) -> Vector3, bool {
-    collision_point, ok := get_collision_point(segment, plane_from_quad(quad), segment_a_is_valid, segment_b_is_valid);
-
-    if !ok || !is_colliding(collision_point, quad) return collision_point, false;
-
-    return collision_point, ok;
-}
-
-get_collision_points :: (a: OBB, b: Plane) -> [6] Vector3, int {
-    result: [6] Vector3;
-    count: int;
-
-    edges := get_edges(a);
-
-    for edge: edges {
-        collision_point, ok := get_collision_point(edge, b, segment_a_is_valid = false, segment_b_is_valid = it_index < 8);
-        if !ok continue;
-
-        result[count] = collision_point;
-        count += 1;
-    }
-
-    return result, count;
-}
-
-get_collision_points :: (a: OBB, b: Quad) -> [6] Vector3, int {
-    result: [6] Vector3;
-    count: int;
-
-    edges := get_edges(a);
-
-    for edge: edges {
-        collision_point, ok := get_collision_point(edge, b, segment_a_is_valid = false, segment_b_is_valid = it_index < 8);
-        if !ok continue;
-
-        result[count] = collision_point;
-        count += 1;
-    }
-
-    return result, count;
 }
 
 collision_sphere_obb :: (a: Vector3, r: float, obb: OBB) -> bool {
@@ -418,4 +423,130 @@ GetOrtho :: (vec: Vector3) -> Vector3, Vector3 {
     u = normalize(cross(v, n));
 
     return u, v;
+}
+
+get_interval :: (using obb: OBB, axis: Vector3) -> float, float {
+    min :=  FLOAT32_MAX; 
+    max := -FLOAT32_MAX;
+
+    vertices := get_vertices(obb);
+
+    for vertices {
+        projection := dot(axis, it);
+        if min > projection min = projection;
+        if max < projection max = projection;
+    }
+
+    return min, max;
+}
+
+is_axis_overlaping :: (a: OBB, b: OBB, axis: Vector3) -> bool {
+    a_min, a_max := get_interval(a, axis);
+    b_min, b_max := get_interval(b, axis);
+
+    return !(b_min > a_max || a_min > b_max);
+}
+
+get_most_aligned_quad_with_axis :: (using obb: OBB, axis: Vector3) -> Quad {
+    most_aligned: Quad;
+
+    quads := get_quads(obb);
+    max_projection := -FLOAT32_MAX; 
+
+    for quad: quads {
+        quad_normal := normalize(cross(quad.b - quad.a, quad.c - quad.b));
+        projection  := dot(axis, quad_normal);
+
+        if projection > max_projection {
+            max_projection = projection;
+            most_aligned   = quad;
+        }
+    }
+
+    return most_aligned;
+}
+
+get_most_aligned_edge_with_axis :: (using obb: OBB, axis: Vector3) -> Segment {
+    most_aligned: Segment;
+
+    edges := get_edges(obb);
+    max_projection := -FLOAT32_MAX;
+
+    for edge: edges {
+        edge_center := (edge.a + edge.b) / 2.0;
+        edge_normal := normalize(edge_center - position);
+        projection  := dot(axis, edge_normal);
+
+        if projection > max_projection {
+            max_projection = projection;
+            most_aligned   = edge;
+        }
+    }
+
+    return most_aligned;
+}
+
+clip :: (segment: Segment, plane: Plane) -> Segment, bool {
+    clipped: Segment;
+    ok: bool;
+    
+    a_depth := dot(segment.a - plane.position, plane.normal);
+    b_depth := dot(segment.b - plane.position, plane.normal);
+
+    Plane_Side :: enum { FRONT; BACK; ON; }
+
+    a_side: Plane_Side = ifx a_depth > 0.0 then .FRONT else ifx a_depth < 0.0 then .BACK else .ON;
+    b_side: Plane_Side = ifx b_depth > 0.0 then .FRONT else ifx b_depth < 0.0 then .BACK else .ON;
+
+    if a_side == {
+        case .FRONT;
+            if b_side == {
+                case .FRONT;
+                    clipped = .{ segment.a, segment.b };
+                    ok = true;
+
+                case .BACK;
+                    collision_point, collision_ok := get_collision_point(segment, plane);
+                    if collision_ok {
+                        clipped = .{ segment.a, collision_point };
+                        ok = true;
+                    }
+
+                case .ON;
+                    clipped = .{ segment.a, segment.b };
+                    ok = true;
+            }
+
+        case .BACK;
+            if b_side == {
+                case .FRONT;
+                    collision_point, collision_ok := get_collision_point(segment, plane);
+                    if collision_ok {
+                        clipped = .{ collision_point, segment.b };
+                        ok = true;
+                    }
+
+                case .BACK; 
+                    // Segment is entirely clipped
+
+                case .ON; 
+                    // Segment is entirely clipped
+            }
+
+        case .ON;
+            if b_side == {
+                case .FRONT;
+                    clipped = .{ segment.a, segment.b };
+                    ok = true;
+
+                case .BACK; 
+                    // Segment is entirely clipped
+
+                case .ON; 
+                    clipped = .{ segment.a, segment.b };
+                    ok = true;
+            }
+    }
+
+    return clipped, ok;
 }
