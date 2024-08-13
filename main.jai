@@ -256,35 +256,12 @@ draw_one_frame :: (dt: float) {
                 glDrawArrays(GL_TRIANGLES, 0, xx vertices_sphere.count);
 
             case .BOX;
-                loc_color := glGetUniformLocation(default_shader, "color");
-                loc_mat   := glGetUniformLocation(default_shader, "model_matrix");
-            
-                color := Vector4.{ 1, 1, 1, 1 };
-                sca := it.box.extents;
-                mat := make_transformation_matrix4(it.position, it.rotation, sca);
-
-                glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
-                glBindVertexArray(bo_box.vao);
-                glUniform4fv(loc_color, 1, xx *color );
-                glUniformMatrix4fv(loc_mat, 1, false, xx *mat);
-                glDrawArrays(GL_TRIANGLES, 0, xx vertices_box.count);
-                glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
-        } 
-        // aabb := get_aabb(it);
-        // glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
-        // draw_3d_aabb(aabb, .{ 1, 1, 0, 1});
-        // glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
-    }
-
-    /*
-                quadtree: Octree;
-                init(*quadtree, my_physics_world,, temp);
-                glPolygonMode( GL_FRONT_AND_BACK, GL_LINE );
-                for quadtree.nodes {
-                    draw_3d_aabb(it.aabb, .{ 1, 0, 1, 1});
+                obb := OBB.{ it.position, ToMat3(it.rotation), it.box.extents };
+                for get_edges(obb) {
+                    draw_3d_segment(it);
                 }
-                glPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
-    */
+        } 
+    }
 
     draw_3d_buffer();
 
