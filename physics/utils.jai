@@ -178,17 +178,34 @@ get_axes :: (using obb: OBB) -> [3] Vector3 {
     return rotation.v;
 }
 
-get_sat_axes :: (a: OBB, b: OBB) -> [15] Vector3 {
+get_sat_axes :: (a: OBB, b: OBB) -> [15] Vector3, int {
+    result: [15] Vector3;
+    count: int;
+
     a_axes := get_axes(a);
     b_axes := get_axes(b);
 
-    result: [15] Vector3;
     result[0]  = a_axes[0];
     result[1]  = a_axes[1];
     result[2]  = a_axes[2];
     result[3]  = b_axes[0];
     result[4]  = b_axes[1];
     result[5]  = b_axes[2];
+
+    // Check if at least one axis is aligned, if that's the case don't return the cross products
+
+    EPSILON :: .99;
+    if abs(dot(a_axes[0], b_axes[0])) > EPSILON ||
+       abs(dot(a_axes[0], b_axes[1])) > EPSILON ||
+       abs(dot(a_axes[0], b_axes[2])) > EPSILON ||
+       abs(dot(a_axes[1], b_axes[0])) > EPSILON ||
+       abs(dot(a_axes[1], b_axes[1])) > EPSILON ||
+       abs(dot(a_axes[1], b_axes[2])) > EPSILON ||
+       abs(dot(a_axes[2], b_axes[0])) > EPSILON ||
+       abs(dot(a_axes[2], b_axes[1])) > EPSILON ||
+       abs(dot(a_axes[2], b_axes[2])) > EPSILON
+    return result, 6;
+
     result[6]  = normalize(cross(result[0], result[3]));
     result[7]  = normalize(cross(result[0], result[4]));
     result[8]  = normalize(cross(result[0], result[5]));
@@ -199,7 +216,7 @@ get_sat_axes :: (a: OBB, b: OBB) -> [15] Vector3 {
     result[13] = normalize(cross(result[2], result[4]));
     result[14] = normalize(cross(result[2], result[5]));
 
-    return result;
+    return result, 15;
 }
 
 get_projected_interval :: (using obb: OBB, axis: Vector3) -> float, float {

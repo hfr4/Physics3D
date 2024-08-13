@@ -13,6 +13,13 @@ update :: (using world: *World, dt: float) {
     narrowphase_contacts := get_narrowphase_contacts(broadphase_contacts);
     narrowphase_contacts.allocator = temp;
 
+    for narrowphase_contacts {
+        draw_3d_point(local_to_world(it.A, it.point_on_A), color = .{ 1, 0, 0, 1 }, size = 0.1);
+        draw_3d_point(local_to_world(it.B, it.point_on_B), color = .{ 0, 1, 0, 1 }, size = 0.1);
+
+        draw_3d_segment(Segment.{local_to_world(it.A, it.point_on_A), local_to_world(it.A, it.point_on_A) + it.normal * it.depth});
+    }
+
     for narrowphase_contacts solve(it);
 
     for bodies update(it, dt);

@@ -1,6 +1,113 @@
-Camera_Plane :: struct {
-    position: Vector3;
-    normal:   Vector3;
+Camera :: struct {
+    near:         float   = 0.1;
+    far:          float   = 1000.0;
+    fov:          float   = PI / 3.0;
+    position:     Vector3 = .{ 0, 0, 0 };
+    direction:    Vector3 = .{ 0, 0, 1 };
+    up:           Vector3 = .{ 0, 1, 0 };
+    width:        float;
+    height:       float;
+    aspect_ratio: float;
+    near_plane:   Plane;
+    far_plane:    Plane;
+    p_matrix:     Matrix4;
+    v_matrix:     Matrix4;
+    pv_matrix:    Matrix4;
+    ip_matrix:    Matrix4;
+    iv_matrix:    Matrix4;
+    ipv_matrix:   Matrix4;
+}
+
+init :: (camera: *Camera, width: float, height: float) {
+    camera.width  = width;
+    camera.height = height;
+
+    update(camera);
+}
+
+update :: (using camera: *Camera) {
+    aspect_ratio = get_aspect_ratio(camera);
+    near_plane   = get_near_plane(camera);
+    far_plane    = get_far_plane(camera);
+    p_matrix     = get_projection_matrix(camera);
+    v_matrix     = get_view_matrix(camera);
+    pv_matrix    = p_matrix * v_matrix;
+    ip_matrix    = inverse(p_matrix);
+    iv_matrix    = inverse(v_matrix);
+    ipv_matrix   = ip_matrix * iv_matrix;
+}
+
+get_yaw :: (using camera: Camera) -> float {
+    return -atan2(direction.z, direction.x) + PI / 2.0;
+}
+
+get_pitch :: (using camera: Camera) -> float {
+    return -atan2(direction.y, length(Vector2.{ direction.x, direction.z }));
+}
+
+get_near_plane :: (using camera: Camera) -> Plane {
+    return .{ position + (direction * near), direction };
+}
+
+get_far_plane :: (using camera: Camera) -> Plane {
+    return .{ position + (direction * far), direction };
+}
+
+get_aspect_ratio :: (using camera: Camera) -> float {
+    return width / height;
+}
+
+get_projection_matrix :: (using camera: Camera) -> Matrix4 {
+    return make_perspective_matrix4(fov, near, far, aspect_ratio);
+}
+
+get_view_matrix :: (using camera: Camera) -> Matrix4 {
+    return make_view_matrix4(position, direction, up);
+}
+
+look_in_direction :: (using camera: *Camera, yaw: float, pitch: float) {    
+    direction = .{
+        sin(yaw)   * max(abs(cos(pitch)), .001),
+        sin(pitch) * -1,
+        cos(yaw)   * max(abs(cos(pitch)), .001)
+    };
+}
+
+look_at :: (using camera: *Camera, target: Vector3) {
+    dir := target - position;
+    if dir.x == 0  dir.x = .001;
+
+    yaw   := -atan2(dir.z, dir.x) + PI/2;
+    pitch := -atan2(dir.y, sqrt(dir.x*dir.x + dir.z*dir.z));
+
+    look_in_direction(camera, yaw, pitch);
+}
+
+look_at_delta :: (using camera: *Camera, delta: Vector2) {
+    yaw   := get_yaw(camera)   + delta.x;
+    pitch := get_pitch(camera) + delta.y;
+    Clamp(*pitch, -PI/2, PI/2);
+
+    look_in_direction(camera, yaw, pitch);
+}
+
+screen_to_world :: (using camera: Camera, point: Vector2) -> Vector3 {
+    ndc := (2 * point / Vector2.{ width, height }) - .{1, 1};
+    ndc.y *= -1; // [0, 0] at top-left TODO: replace with cam.up
+    vc  := ip_matrix * Vector4.{ ndc.x, ndc.y, -1, 1 };
+    wc  := iv_matrix * Vector4.{ vc.x, vc.y, -1, 0 };
+
+    return normalize(wc.xyz);
+}
+
+world_to_screen :: (using camera: Camera, point: Vector3) -> Vector3, bool {
+    is_point_aligned_with_plane := dot(point - near_plane.position, near_plane.normal) >= 0;
+    if !is_point_aligned_with_plane return .{}, false;
+
+    ndc := pv_matrix * Vector4.{ point.x, point.y, point.z,1 } ;
+    sc  := Vector2.{ (ndc.x + 1) / 2 * width, (ndc.y + 1) / 2 * height };
+
+    return .{ sc.x, sc.y, ndc.z }, true;
 }
 
 Camera_Direction :: enum {
@@ -10,109 +117,14 @@ Camera_Direction :: enum {
     FORTH;
     AWAY_FROM;
     TOWARD;
-    RIGHT_ABS;
-    LEFT_ABS;
-    FORTH_ABS;
-    BACK_ABS;
     UP;
     DOWN;
 }
 
-Camera :: struct {
-    near:         float;
-    far:          float;
-    fov:          float;
-    width:        float;
-    height:       float;
-    position:     Vector3;
-    direction:    Vector3;
-    up:           Vector3;
-    aspect_ratio: float;
-    near_plane:   Camera_Plane;
-    far_plane:    Camera_Plane;
-}
-
-init :: (cam: *Camera, near: float = 0.1, far: float = 1000.0, fov: float = PI/3, width: float, height: float, position: Vector3 = .{0,0,0}, direction: Vector3 = .{0,0,1}, up: Vector3 = .{0,1,0}) {
-    cam.near      = near;
-    cam.far       = far;
-    cam.fov       = fov;
-    cam.width     = width;
-    cam.height    = height;
-    cam.position  = position;
-    cam.direction = direction;
-    cam.up        = up;
-
-    update(cam);
-}
-
-update :: (using cam: *Camera) {
-    aspect_ratio = get_aspect_ratio(cam);
-    near_plane   = get_near_plane(cam);
-    far_plane    = get_far_plane(cam);
-}
-
-get_yaw :: (using cam: Camera) -> float {
-    return -atan2(direction.z, direction.x) + PI/2;
-}
-
-get_pitch :: (using cam: Camera) -> float {
-    return -atan2(direction.y, length(Vector2.{ direction.x, direction.z }));
-}
-
-get_near_plane :: (using cam: Camera) -> Camera_Plane {
-    return .{ position + (direction * near), direction };
-}
-
-get_far_plane :: (using cam: Camera) -> Camera_Plane {
-    return .{ position + (direction * far), direction };
-}
-
-get_aspect_ratio :: (using cam: Camera) -> float {
-    return width / height;
-}
-
-get_projection_matrix :: (using cam: Camera) -> Matrix4 {
-    return mat4_perspective_matrix(fov, near, far, aspect_ratio);
-}
-
-get_view_matrix :: (using cam: Camera) -> Matrix4 {
-    return mat4_view_matrix(position, direction, up);
-}
-
-look_in_direction :: (using cam: *Camera, yaw: float, pitch: float) {    
-    direction = .{
-        sin(yaw)   * max(abs(cos(pitch)), .001),
-        sin(pitch) * -1,
-        cos(yaw)   * max(abs(cos(pitch)), .001)
-    };
-}
-
-look_at :: (using cam: *Camera, target: Vector3) {
-    dir := target - position;
-    if dir.x == 0  dir.x = .001;
-
-    yaw   := -atan2(dir.z, dir.x) + PI/2;
-    pitch := -atan2(dir.y, sqrt(dir.x*dir.x + dir.z*dir.z));
-
-    look_in_direction(cam, yaw, pitch);
-}
-
-look_at_delta :: (using cam: *Camera, delta: Vector2) {
-    yaw   := get_yaw(cam)   + delta.x;
-    pitch := get_pitch(cam) + delta.y;
-    Clamp(*pitch, -PI/2, PI/2);
-
-    look_in_direction(cam, yaw, pitch);
-}
-
-move_noclip :: (using cam: *Camera, dir: Camera_Direction, distance: float) {
+move_noclip :: (using camera: *Camera, dir: Camera_Direction, distance: float) {
     dx, dy, dz: float;
 
-    if dir == {
-        case .RIGHT_ABS;  position.x += distance;        
-        case .LEFT_ABS;   position.x -= distance;       
-        case .FORTH_ABS;  position.z += distance;        
-        case .BACK_ABS;   position.z -= distance;       
+    if dir == {     
         case .UP;         position.y += distance; 
         case .DOWN;       position.y -= distance;   
         case .LEFT;       dx = -1;
@@ -123,8 +135,8 @@ move_noclip :: (using cam: *Camera, dir: Camera_Direction, distance: float) {
         case .TOWARD;     dz =  1;
     }
 
-    yaw   := get_yaw(cam);
-    pitch := get_pitch(cam);
+    yaw   := get_yaw(camera);
+    pitch := get_pitch(camera);
 
     if dx != 0 || dy != 0 {
         angle := atan2(dy, dx);

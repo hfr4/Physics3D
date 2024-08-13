@@ -75,24 +75,6 @@ box_sphere_contact :: (A: *Body, B: *Body) -> Narrowphase_Contact, bool {
     return contact, true;
 }
 
-/*
-box_box_contact :: (A: *Body, B: *Body) -> Narrowphase_Contact, bool {
-    contact: Narrowphase_Contact;
-
-    world_point_on_A, world_point_on_B, is_colliding := EPA_Collision(A, B);
-    if !is_colliding return contact, false;
-
-    contact.A          = A;
-    contact.B          = B;
-    contact.normal     = normalize(world_point_on_B - world_point_on_A);
-    contact.point_on_A = world_to_local(A, world_point_on_A);
-    contact.point_on_B = world_to_local(B, world_point_on_B);
-    contact.depth      = distance(contact.point_on_A, contact.point_on_B);
-
-    return contact, true;
-}
-*/
-
 box_box_contacts :: (A: *Body, B: *Body) -> [8] Narrowphase_Contact, int {
     contacts: [8] Narrowphase_Contact;
     count: int;
@@ -104,7 +86,9 @@ box_box_contacts :: (A: *Body, B: *Body) -> [8] Narrowphase_Contact, int {
     sat_normal: Vector3; // Normal from A to B
     sat_index: int;
 
-    for axis: get_sat_axes(a_obb, b_obb) {
+    axes, axes_count := get_sat_axes(a_obb, b_obb);
+
+    for axis: array_view(axes, 0, axes_count) {
         a_min, a_max := get_interval(a_obb, axis);
         b_min, b_max := get_interval(b_obb, axis);
 
